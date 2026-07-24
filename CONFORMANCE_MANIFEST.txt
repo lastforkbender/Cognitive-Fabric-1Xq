@@ -1,0 +1,86 @@
+Cognitive Fabric 1Xq Verification Manifest
+==========================================
+
+Release date: 2026-07-23
+Architecture model: CF-1XQ-1.0
+Publication model: CF-PUB-1.0
+Reference implementation: cognitive_fabric_reference.py
+Original prototype: preserved separately and not overwritten
+
+Verification record
+-------------------
+
+Python: 3.12.13
+Compilation: PASS
+Demonstration: PASS
+Conformance suite: PASS (26 tests)
+
+SANY2 Version 2.2:
+  Parse, semantic processing, and lint: PASS
+
+TLAPS rolling 1.6.0-pre, build 3ab43c7:
+  Strict clean run: PASS
+  Proof obligations: PASS (747 of 747)
+  Isabelle reconstruction: PASS (no errors)
+
+TLA Tools 2026.03.02.213938, revision 54e73ad:
+  TLC configuration: Resolvers={r1,r2}, QueueCapacity=2, MaxOutcomeId=4
+  Safety invariant: PASS
+  Finite-instance weak-fairness property: PASS
+  States generated: 920,549
+  Distinct states: 402,582
+  Complete-state-graph depth: 38
+  Deadlock checking: disabled by configuration
+  Negative control: PASS (deliberately false invariant rejected at a
+  reachable PublishCommit)
+
+PDF build: PASS (two stable pdflatex passes)
+PDF visual inspection: PASS (21 rendered pages)
+LaTeX diagnostic scan: PASS (no warnings, overfull boxes, underfull boxes,
+undefined references, or multiply defined labels)
+
+The test suite covers transform contracts and round trips, certified precision
+bounds, monotone broadening, closed-domain B-spline partition of unity,
+canonical snapshot identity and referential integrity, deterministic replay,
+vote-mass and simplex invariants, exact bounded coalition optimization,
+prior-neutral pooling, proposal non-interference, cumulative learning,
+precision adaptation, lifecycle transitions, immutable generations,
+snapshot capture, concurrent publication, synchronous exception rollback,
+stale/foreign outcome accounting, and bounded-queue drops.
+
+The TLAPS module proves the abstract publication invariant: typing, queue and
+batch bounds, queue occurrence uniqueness, disjoint and exhaustive disposition
+accounting with exact counts, snapshot/generation agreement, publisher phase
+facts, resolution metadata consistency, per-commit classification, and direct
+foreign-application exclusion.
+
+SHA-256
+-------
+
+aaa9229388d362732977485c641140849680ef3c30524cab9c75d87f9b9aea82  cognitive_fabric_reference.py
+f7da297c3b46e13fec435a119a364feaf1526565bcc3f7be2f13c670d373f2e5  test_cognitive_fabric_reference.py
+a06d2a43bf243d705cf75da0579cd9784051a12bce75cc760c50858c749ab3bf  Cognitive_Fabric_1Xq.tex
+66571af50e29def3e88a8960004280ae6ce64cbbb278933eab32ad28e629dd59  output/pdf/Cognitive_Fabric_1Xq.pdf
+69a589d48d64681dc28f3761f504abc84546ede208c1e1fc8825954a60e2666c  README.md
+177bd47653f4efe0a43ed72bebd3edcebee64a424cb503a21b5ddd0abb89e06c  formal/CognitiveFabricPublication.tla
+4d656f7fcae777a5b22894ae44ca85fbb399d590d3ea9d950fc5257b17c041d8  formal/CognitiveFabricPublicationProof.tla
+7f6eaff276230e80117f85c58e370a8de62e8ea3aedb199f02472e5c14eac38c  formal/CognitiveFabricPublication.cfg
+79ebe67dea37b97b893d556c442b3e4541da849b20fe09a17df3d90969b467ce  formal/VERIFICATION_RESULTS.txt
+
+Claim boundary
+--------------
+
+The manuscript's algebraic proofs are over exact real arithmetic. TLAPS proves
+the abstract publication safety theorem only. TLC is a finite-instance
+cross-check; its liveness result is not a symbolic liveness proof. The Python
+code is a finite-precision implementation with explicit tolerances and
+validation, but no statement-level Python-to-TLA+ refinement is proved.
+
+ResolutionSnapshotConsistency is metadata-only. Foreign outcomes are excluded
+from direct application but may cause bounded-capacity interference. The
+publication trace correspondence assumes at most one local observation per
+modeled resolver completion. Each TLA+ instance has a finite MaxOutcomeId.
+Concurrency arguments rely on stated in-process Python lock semantics.
+Snapshot identity assumes SHA-256 collision resistance. Crash consistency,
+durability, scheduler fairness, durable exactly-once delivery, and generic
+atomic-object linearizability are not claimed.
