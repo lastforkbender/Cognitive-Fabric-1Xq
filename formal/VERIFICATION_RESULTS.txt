@@ -1,0 +1,89 @@
+Cognitive Fabric CF-PUB-1.0 Verification Results
+================================================
+
+Verification date: 2026-07-23
+
+Specification
+-------------
+
+Module: CognitiveFabricPublication.tla
+Proof module: CognitiveFabricPublicationProof.tla
+Configuration: CognitiveFabricPublication.cfg
+
+Parameter assumptions:
+  - Resolvers is finite and nonempty
+  - QueueCapacity is a positive natural number
+  - MaxOutcomeId is a positive natural number
+
+Mechanized theorem:
+  ParameterAssumptions |- SafetySpec => []Safety
+
+SANY
+----
+
+Tool: SANY2 Version 2.2
+Result: PASS (parse, semantic processing, and lint)
+
+TLAPS / Isabelle
+-----------------
+
+Tool: TLAPS rolling 1.6.0-pre, build 3ab43c7
+Downloaded archive SHA-256:
+  a686da5dc31892edcd02f25bb14061427e29e16317002d43c5b5be970d1d5daf
+
+Command:
+  tlapm --strict --cleanfp -C CognitiveFabricPublicationProof.tla
+
+Result:
+  All 747 obligations proved.
+  Isabelle reconstruction completed.
+  Proof checking done. No errors found.
+
+TLC
+---
+
+Tool: TLA Tools 2026.03.02.213938 (revision 54e73ad)
+Configuration:
+  Resolvers = {r1, r2}
+  QueueCapacity = 2
+  MaxOutcomeId = 4
+  Specification = LiveSpec
+  Invariant = InductiveSafety
+  Property = PublicationEventuallyReturns
+  Deadlock checking = disabled
+
+Result:
+  Model checking completed. No error has been found.
+  920,549 states generated.
+  402,582 distinct states found.
+  Complete-state-graph depth: 38.
+
+Negative control
+----------------
+
+An ephemeral wrapper added the deliberately false invariant
+  FalseInvariant == generation = 0
+under the same LiveSpec and constants.
+
+Expected result: FAIL.
+Observed result: TLC rejected FalseInvariant at a reachable PublishCommit
+after 1,785 generated and 938 distinct states.
+
+Python conformance
+------------------
+
+Tool: Python 3.12.13 unittest
+Command:
+  python3 -m unittest -v test_cognitive_fabric_reference.py
+
+Result:
+  PASS (26 tests).
+
+Scope
+-----
+
+TLAPS proves the abstract publication safety theorem. TLC is an independent
+finite-instance cross-check. Python tests are executable conformance evidence.
+No statement-level Python-to-TLA+ refinement theorem, generic atomic-object
+linearizability theorem, crash/durability theorem, or symbolic liveness theorem
+is claimed.
