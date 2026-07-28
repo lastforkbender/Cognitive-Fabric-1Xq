@@ -1,7 +1,7 @@
 """
 cognitive_fabric_reference.py
 
-CF-1XQ-1.0 reference realization of the Cognitive Fabric mathematical
+CF-1XQ-1.1 reference realization of the Cognitive Fabric mathematical
 architecture.
 
 Transparent, self-improving selector registry with:
@@ -46,7 +46,7 @@ CandidateId = str
 SelectorId = str
 TransformId = str
 
-FORMAL_MODEL_ID = "CF-1XQ-1.0"
+FORMAL_MODEL_ID = "CF-1XQ-1.1"
 NUMERICAL_TOLERANCE = 1e-10
 
 
@@ -62,6 +62,36 @@ def safe_probability(value: float, epsilon: float = 1e-12) -> float:
     if not isfinite(value):
         raise ValueError(f"Non-finite probability component: {value!r}")
     return clamp(value, epsilon, 1.0)
+
+
+def stabilize_distribution(
+    probabilities: Mapping[str, float],
+    *,
+    epsilon: float = 1e-12,
+) -> dict[str, float]:
+    """
+    Apply one common probability floor and renormalize.
+
+    Pooling uses this operator for both the prior and every local report.  The
+    shared operator is what makes the finite-precision neutrality statement
+    exact relative to the stabilized prior.
+    """
+    if not probabilities:
+        raise ValueError("A probability distribution cannot be empty.")
+    require_finite(probabilities.values(), label="Probability distribution")
+    if any(value < 0.0 or value > 1.0 for value in probabilities.values()):
+        raise ValueError("Probability values must lie in [0, 1].")
+    if not isfinite(epsilon) or not 0.0 < epsilon < 1.0:
+        raise ValueError("Probability floor must lie in (0, 1).")
+
+    floored = {
+        key: clamp(value, epsilon, 1.0)
+        for key, value in probabilities.items()
+    }
+    total = fsum(floored.values())
+    if not isfinite(total) or total <= 0.0:
+        raise ValueError("Stabilized probability mass must be finite and positive.")
+    return {key: value / total for key, value in floored.items()}
 
 
 def sigmoid(value: float) -> float:
@@ -658,24 +688,72 @@ class PrecisionModel:
                 if col_index > row_index:
                     built.append(0.0)
                 elif col_index == row_index:
-                    built.append(scale * (softplus(value) + 1e-6))
+                    realized = scale * (softplus(value) + 1e-6)
+                    if not isfinite(realized):
+                        raise OverflowError(
+                            "Direct precision factor realization overflowed; "
+                            "matrix() remains overflow-safe."
+                        )
+                    built.append(realized)
                 else:
-                    built.append(scale * value)
+                    realized = scale * value
+                    if not isfinite(realized):
+                        raise OverflowError(
+                            "Direct precision factor realization overflowed; "
+                            "matrix() remains overflow-safe."
+                        )
+                    built.append(realized)
             rows.append(tuple(built))
         return tuple(rows)
 
     def matrix(self) -> Matrix:
-        factor = self.factor()
-        positive_semidefinite = matmul(factor, transpose(factor))
         spectral_floor = self.spectral_floor
         available = self.max_eigenvalue - spectral_floor
-        upper_bound = symmetric_spectral_upper_bound(positive_semidefinite)
-        if upper_bound > available:
-            positive_semidefinite = matrix_scale(
-                positive_semidefinite,
-                available / upper_bound,
-            )
         floor = matrix_scale(identity_matrix(self.dimension), spectral_floor)
+        if available == 0.0:
+            return floor
+
+        # Write L = sqrt(gamma) * m * N with max(abs(N_ij)) = 1.  Building
+        # N N^T first avoids overflow in L L^T.  If the exact row-sum bound
+        # exceeds the available spectrum, homogeneity lets us apply the cap
+        # without ever materializing gamma * m^2.
+        unscaled_rows: list[Vector] = []
+        peak = 0.0
+        for row_index, row in enumerate(self.raw_lower):
+            built: list[float] = []
+            for col_index, value in enumerate(row):
+                if col_index > row_index:
+                    realized = 0.0
+                elif col_index == row_index:
+                    realized = softplus(value) + 1e-6
+                else:
+                    realized = value
+                built.append(realized)
+                peak = max(peak, abs(realized))
+            unscaled_rows.append(tuple(built))
+
+        if not isfinite(peak) or peak <= 0.0:
+            raise ValueError("Precision factor normalization requires a finite scale.")
+
+        normalized = tuple(
+            tuple(value / peak for value in row)
+            for row in unscaled_rows
+        )
+        normalized_psd = matmul(normalized, transpose(normalized))
+        normalized_bound = symmetric_spectral_upper_bound(normalized_psd)
+        if not isfinite(normalized_bound) or normalized_bound <= 0.0:
+            raise ValueError("Precision row-sum certificate must be finite and positive.")
+
+        log_amplitude = log(self.factor_scale) + 2.0 * log(peak)
+        log_exact_bound = log_amplitude + log(normalized_bound)
+        if log_exact_bound <= log(available):
+            amplitude = exp(log_amplitude)
+            positive_semidefinite = matrix_scale(normalized_psd, amplitude)
+        else:
+            positive_semidefinite = matrix_scale(
+                normalized_psd,
+                available / normalized_bound,
+            )
         return matrix_add(positive_semidefinite, floor)
 
     @classmethod
@@ -906,15 +984,25 @@ class SplineAxis:
             raise ValueError("Spline knots must be non-decreasing.")
         if self.basis_count <= 0:
             raise ValueError("Spline axis requires at least one basis function.")
+        if self.domain_min >= self.domain_max:
+            raise ValueError("Spline axis requires a non-degenerate active domain.")
 
     @property
     def basis_count(self) -> int:
         return len(self.knots) - self.degree - 1
 
+    @property
+    def domain_min(self) -> float:
+        return self.knots[self.degree]
+
+    @property
+    def domain_max(self) -> float:
+        return self.knots[self.basis_count]
+
     def evaluate(self, value: float) -> Vector:
         if not isfinite(value):
             raise ValueError("Spline input must be finite.")
-        if value == self.knots[-1]:
+        if value == self.domain_max:
             return tuple(
                 1.0 if index == self.basis_count - 1 else 0.0
                 for index in range(self.basis_count)
@@ -1818,9 +1906,19 @@ def aggregate_coalition(
     )
     if prior_total <= 0.0:
         raise RuntimeError("Enabled candidate prior mass must be positive.")
-    prior_distribution = {
+    raw_prior_distribution = {
         candidate_id: candidate.prior / prior_total
         for candidate_id, candidate in enabled_candidates.items()
+    }
+    prior_distribution = stabilize_distribution(raw_prior_distribution)
+    local_distributions = {
+        vote.selector_id: stabilize_distribution(
+            {
+                score.candidate_id: score.local_posterior
+                for score in vote.candidate_scores
+            }
+        )
+        for vote in selected_votes
     }
     raw_selector_weights = {
         vote.selector_id: (
@@ -1842,9 +1940,7 @@ def aggregate_coalition(
     weight_normalizer = max(1.0, fsum(raw_selector_weights.values()))
 
     for candidate_id in sorted(enabled_candidates):
-        prior_log_probability = log(
-            safe_probability(prior_distribution[candidate_id])
-        )
+        prior_log_probability = log(prior_distribution[candidate_id])
         selector_terms: list[tuple[SelectorId, float]] = []
         support_total = 0.0
         opposition_total = 0.0
@@ -1852,7 +1948,7 @@ def aggregate_coalition(
 
         for vote in selected_votes:
             score = next(item for item in vote.candidate_scores if item.candidate_id == candidate_id)
-            p = clamp(score.local_posterior, 1e-12, 1.0 - 1e-12)
+            p = local_distributions[vote.selector_id][candidate_id]
             reliability = score.components.reliability
             activation = vote.activation.routing_activation
             weight = reliability * activation / weight_normalizer
@@ -2313,6 +2409,8 @@ class Outcome:
         require_finite(self.input_vector, label="Outcome input")
         if not self.selected_candidate_id:
             raise ValueError("Outcome candidate id cannot be empty.")
+        if not isinstance(self.succeeded, bool):
+            raise TypeError("Outcome success must be Boolean.")
         if not isfinite(self.reward) or not 0.0 <= self.reward <= 1.0:
             raise ValueError("Outcome reward must lie in [0, 1].")
         if self.latency_ns < 0 or self.observed_ns < 0:

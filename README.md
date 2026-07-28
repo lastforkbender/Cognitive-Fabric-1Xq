@@ -1,11 +1,11 @@
-# Cognitive Fabric 1Xq
+# Cognitive Fabric 1Xq, Revision 1.1
 
 This package turns the original Cognitive Fabric prototype into a mathematically
 specified architecture and a checked reference realization.
 
 ## Contents
 
-- `output/pdf/Cognitive_Fabric_1Xq.pdf` — the 21-page research manuscript.
+- `output/pdf/Cognitive_Fabric_1Xq.pdf` — the research manuscript.
 - `Cognitive_Fabric_1Xq.tex` — complete LaTeX source.
 - `formal/CognitiveFabricPublication.tla` — executable publication transition
   system and safety predicates.
@@ -15,7 +15,7 @@ specified architecture and a checked reference realization.
 - `formal/VERIFICATION_RESULTS.txt` — tool versions, commands, and recorded
   results.
 - `cognitive_fabric_reference.py` — standard-library Python realization of
-  formal model `CF-1XQ-1.0`.
+  formal model `CF-1XQ-1.1`.
 - `test_cognitive_fabric_reference.py` — executable conformance suite.
 - `CONFORMANCE_MANIFEST.txt` — release identity, verification record, and
   SHA-256 digests.
@@ -32,7 +32,8 @@ snapshots, decisions, outcomes, and publication transitions. It proves:
 - spectral floor, ceiling, and condition-number bounds for selector precision;
 - local and coalition simplex invariants and vote-mass conservation;
 - exact optimality of bounded coalition selection under the stated budget;
-- the tempered log-pool identity and prior neutrality;
+- the tempered log-pool identity, stabilized prior neutrality at the
+  probability floor, and exact neutrality when the floor is inactive;
 - deterministic replay for explicit logical time and seed;
 - generation monotonicity, direct foreign-evidence exclusion, and update
   safety;
@@ -58,11 +59,30 @@ states, 402,582 distinct states, and depth 38 for two resolvers, capacity two,
 and four occurrence IDs, with no error. A deliberately false invariant was
 rejected at a reachable `PublishCommit`.
 
+Revision 1.1 leaves the `CF-PUB-1.0` specification, proof, and configuration
+byte-for-byte unchanged, so that formal verification record is carried forward
+without representing it as a new TLAPS execution.
+
 Algebraic theorems are over exact reals. The Python code uses explicit
 finite-precision tolerances, immutable values, a canonical SHA-256 snapshot
 identity, and stated concurrency assumptions. The conformance suite is
 executable evidence. It is not the TLAPS proof and does not establish a
 statement-level refinement from Python to TLA+.
+
+## Revision 1.1 corrections
+
+- Prior and local reports now pass through the same normalized stabilization
+  operator. The corrected theorem distinguishes stabilized neutrality from
+  exact interior neutrality.
+- Every spline axis derives the active domain
+  `[knots[degree], knots[basis_count]]`; partition of unity is claimed only on
+  that domain, and degenerate domains are rejected.
+- Precision construction normalizes before forming the PSD product and uses a
+  logarithmic cap comparison, preventing overflow for extreme finite factors.
+- Outcome success is explicitly Boolean in both the mathematical state and the
+  executable constructor.
+- Coalition optimality is explicitly combinatorial exactness over realized
+  objective values; exact-real ordering is not attributed to IEEE-754 ties.
 
 ## Claim boundary
 

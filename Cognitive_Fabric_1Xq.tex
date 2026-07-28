@@ -56,15 +56,15 @@
 \newcommand{\softmax}{\operatorname{softmax}}
 \newcommand{\logit}{\operatorname{logit}}
 \newcommand{\arglexmin}{\operatorname{lexmin}}
-\newcommand{\modelid}{\texttt{CF-1XQ-1.0}}
+\newcommand{\modelid}{\texttt{CF-1XQ-1.1}}
 
 \title{\vspace{-8mm}
   \textbf{Cognitive Fabric: An Executable Formalism for\\
   Snapshot-Consistent Adaptive Coalitions of Local Experts}\\[2mm]
-  \large 1Xq Mathematical Architecture Specification
+  \large 1Xq Mathematical Architecture Specification, Revision 1.1
 }
 \author{Rob Tharpe}
-\date{July 23, 2026}
+\date{July 28, 2026}
 
 \begin{document}
 \maketitle
@@ -84,7 +84,8 @@ transition.
 The principal results are: composition reversibility; certified lower, upper,
 and condition-number bounds for selector precision; local and coalition
 simplex invariants; vote-mass conservation; exact optimality of the bounded
-coalition; a tempered log-pool identity and prior-neutrality result;
+coalition; a tempered log-pool identity and a corrected stabilized
+prior-neutrality result;
 deterministic replay for an explicit clock and seed; per-resolution snapshot
 consistency; mechanically checked bounded-queue conservation, commit
 classification, and foreign-source isolation in the abstraction; generation
@@ -251,7 +252,7 @@ A snapshot is well formed when:
   \item at least one candidate is enabled and at least one selector is
   routable;
   \item every transform, selector center, precision, and spline model has
-  dimension $d$;
+  dimension $d$, and every spline axis has a nondegenerate active domain;
   \item every transform reference and edge endpoint resolves;
   \item every selector contains exactly one model for every candidate;
   \item all semantic numbers are finite and satisfy their declared ranges;
@@ -415,6 +416,20 @@ eigenvalue of $\Lambda$ in $[f,\lambda_{\max}]$.  Finally,
 \]
 \end{proof}
 
+\begin{remark}[Overflow-safe realization]
+The exact theorem permits arbitrarily large finite entries of $R$ and
+$\gamma$.  The realization does not first form a potentially overflowing
+$LL^\top$.  It writes $L=\sqrt{\gamma}\,mN$, where
+$m=\max_{ij}|(L/\sqrt{\gamma})_{ij}|$ and $\max_{ij}|N_{ij}|=1$, constructs
+$NN^\top$, and compares the logarithm of its scaled row-sum bound with the
+available spectral budget.  When the cap is active, homogeneity gives
+\[
+ \widehat A=\frac{\lambda_{\max}-f}{B(NN^\top)}NN^\top
+\]
+without materializing $\gamma m^2$.  Thus extreme finite factors are capped
+without an intermediate infinity or NaN.
+\end{remark}
+
 \begin{corollary}[Monotone broadening]
 \label{cor:broadening}
 For fixed raw factor and bounds, replacing $\gamma$ by
@@ -465,9 +480,19 @@ u_{sc}(z_s)=b_{sc}
 \qquad
 \widehat p_{sc}=\sigma(u_{sc}).
 \]
-Spline axes are finite and nondecreasing, and the closed right endpoint is
-defined as the final basis vector.  Thus the basis partitions unity throughout
-the declared closed domain.
+For a degree-$p$ axis with knot sequence
+$t_0\le\cdots\le t_m$ and $N=m-p$ basis functions, define its active domain as
+\[
+ I=[t_p,t_N],\qquad t_p<t_N.
+\]
+The Cox--de Boor basis is evaluated on $I$, with the closed right endpoint
+$t_N$ defined as the final basis vector.  On this declared domain the basis is
+nonnegative and partitions unity:
+\[
+ B_{jk}(z)\ge0,\qquad \sum_k B_{jk}(z)=1
+ \quad(z\in I).
+\]
+Outside $I$, the score remains defined, but partition of unity is not claimed.
 
 The local score has eight positive components:
 candidate prior propensity, selector activation, spline fit, smoothed
@@ -630,12 +655,32 @@ coalitions are scored.
 This is exact optimality over the evaluated vote set, not over every selector
 in the registry.
 
+\begin{remark}[Combinatorial versus arithmetic exactness]
+The theorem is combinatorially exact for the stated objective: every feasible
+coalition is scored.  The Python realization compares IEEE-754 score values, so
+rounding can merge mathematically distinct near-ties.  It is exact over those
+realized scores, with the same canonical tie rule; arbitrary-precision
+agreement with exact-real ordering is not claimed.
+\end{remark}
+
 \section{Coalition posterior}
 
 Normalize enabled prior propensities:
 \[
 \pi_c=\frac{\rho_c}{\sum_{j\in\mathcal C^+}\rho_j}.
 \]
+For any finite distribution $p$ on $\mathcal C^+$, define the common
+finite-precision stabilization operator
+\[
+ S_\epsilon(p)_c=
+ \frac{\operatorname{saf}(p_c)}
+ {\sum_{j\in\mathcal C^+}\operatorname{saf}(p_j)}.
+\]
+Let $\widetilde\pi=S_\epsilon(\pi)$ and
+$\widetilde q_s=S_\epsilon(q_s)$.  Using the same normalized operator on both
+sides is essential: independently clipping prior and local components without
+renormalization does not preserve neutrality at the probability floor.
+
 For $s\in K^\star$, let
 \[
 \omega_s=a_sr_s,\qquad
@@ -644,12 +689,11 @@ Z_\omega=\max\left(1,\sum_{s\in K^\star}\omega_s\right),
 w_s=\frac{\omega_s}{Z_\omega}.
 \]
 Then $w_s\ge0$ and $W=\sum_s w_s\le1$.  With
-$\bar\pi_c=\operatorname{saf}(\pi_c)$ and
-$\bar q_{sc}=\clip{q_{sc}}{\epsilon}{1-\epsilon}$, define
+$\widetilde\pi$ and $\widetilde q_s$ as above, define
 \[
-G_c=\log\bar\pi_c+
+G_c=\log\widetilde\pi_c+
 \sum_{s\in K^\star}
-w_s(\log\bar q_{sc}-\log\bar\pi_c),
+w_s(\log\widetilde q_{sc}-\log\widetilde\pi_c),
 \]
 \[
 P(c\mid x,X)=
@@ -662,8 +706,8 @@ maximizers.
 \label{thm:logpool}
 \[
 P(c\mid x,X)\propto
-\bar\pi_c^{\,1-W}
-\prod_{s\in K^\star}\bar q_{sc}^{\,w_s}.
+\widetilde\pi_c^{\,1-W}
+\prod_{s\in K^\star}\widetilde q_{sc}^{\,w_s}.
 \]
 The prior has nonnegative residual weight $1-W$.
 \end{theorem}
@@ -671,20 +715,25 @@ The prior has nonnegative residual weight $1-W$.
 \begin{proof}
 Expanding $G_c$ gives
 \[
-G_c=(1-W)\log\bar\pi_c
-+\sum_sw_s\log\bar q_{sc}.
+G_c=(1-W)\log\widetilde\pi_c
++\sum_sw_s\log\widetilde q_{sc}.
 \]
 Exponentiation and normalization yield the result.
 \end{proof}
 
-\begin{corollary}[Prior neutrality]
+\begin{corollary}[Stabilized prior neutrality]
 \label{cor:prior-neutrality}
-If every selected local report equals $\pi$, then $P=\pi$.
+If every selected local report equals $\pi$, then
+$P=S_\epsilon(\pi)$.  If additionally
+$\min_c\pi_c\ge\epsilon$, then $P=\pi$.
 \end{corollary}
 
 \begin{proof}
-Substitute $\bar q_{sc}=\bar\pi_c$ into $G_c$.  Every evidence difference is
-zero, so softmax normalizes $\log\pi_c$ back to $\pi_c$.
+The equality $q_s=\pi$ implies
+$S_\epsilon(q_s)=S_\epsilon(\pi)$ because the same deterministic operator is
+applied to both distributions.  Every evidence difference is therefore zero,
+and softmax normalizes $\log S_\epsilon(\pi)_c$ back to
+$S_\epsilon(\pi)$.  When no component is floored, $S_\epsilon(\pi)=\pi$.
 \end{proof}
 
 \begin{theorem}[Coalition simplex]
@@ -881,9 +930,9 @@ An outcome is
 \[
 o=(g,x,c,r,b,\lambda,t_o,D,m,h),
 \]
-where $r\in[0,1]$ is reward, $b$ success, $\lambda\ge0$ latency, $t_o$ observed
-time, $D$ the originating decision, $m$ the model identifier, and $h$ the
-snapshot fingerprint.
+where $r\in[0,1]$ is reward, $b\in\{\mathsf{false},\mathsf{true}\}$ is success,
+$\lambda\ge0$ is latency, $t_o$ observed time, $D$ the originating decision,
+$m$ the model identifier, and $h$ the snapshot fingerprint.
 \end{definition}
 
 \begin{definition}[Outcome validity]
@@ -954,7 +1003,7 @@ indirectly.  Preventing that channel would require admission-time validation or
 separate capacity.
 
 \begin{proposition}[Update range safety]
-For a well-formed snapshot, authentic outcomes, and learning rates in $[0,1]$:
+For a well-formed snapshot, valid typed outcomes, and learning rates in $[0,1]$:
 observation and success counts remain valid; reward means stay in $[0,1]$;
 latency means remain nonnegative; selector reliability remains in $[0.01,1]$;
 edge statistics remain in $[0,1]$; and updated precision satisfies
@@ -1172,7 +1221,7 @@ Selector vote and $q_{sc}$ &
 Coalition objective and exact optimum &
 \path{score_coalition}, \path{build_coalition} \\
 Tempered log pool &
-\path{aggregate_coalition} \\
+\path{stabilize_distribution}, \path{aggregate_coalition} \\
 Alignment certificate &
 \path{posterior_alignment}, \path{PosteriorAlignment} \\
 Typed advisory proposal &
@@ -1204,7 +1253,9 @@ The realization and correspondence claim is conditional on:
   \item exact-real algebra for the mathematical theorems;
   \item tolerance-bounded orthogonality and backward error for IEEE-754
   realization;
-  \item finite inputs and validated constructors;
+  \item finite inputs, validated constructors, overflow-safe precision
+  normalization, and explicit failure rather than a returned decision when an
+  unrelated arithmetic operation cannot remain finite;
   \item the lock semantics of the supported Python runtime;
   \item at most one local observation per modeled resolution completion when
   comparing Python publication traces with the TLA+ module;
@@ -1226,20 +1277,23 @@ properties:
   \item complete reverse-order chain reconstruction;
   \item mutation isolation for caller-owned matrices;
   \item certified precision floor, ceiling, and condition bounds over generated
-  matrices;
+  matrices, including an extreme finite-factor overflow regression;
   \item monotone broadening in Loewner order;
-  \item B-spline nonnegativity and partition of unity on the closed domain;
+  \item B-spline nonnegativity and partition of unity on the precisely derived
+  closed active domain, plus rejection of degenerate domains;
   \item canonical snapshot identity under registry permutations;
   \item rejection of duplicate, missing, unknown, and non-finite state;
   \item deterministic replay for fixed snapshot, time, seed, and input;
   \item local and coalition simplex invariants and vote-mass conservation;
   \item exact coalition agreement with independent feasible-subset
   enumeration;
-  \item prior neutrality of the tempered log pool;
+  \item exact prior neutrality away from the probability floor and stabilized
+  prior neutrality at the floor;
   \item consistent exclusion of disabled candidates;
   \item advisory proposal non-interference;
   \item cumulative repeated-outcome spline learning and nontrivial precision
   learning;
+  \item rejection of non-Boolean outcome success values;
   \item lifecycle reachability of probation;
   \item old-snapshot preservation and generation increment;
   \item occurrence-level application of the captured queue in a two-publisher
