@@ -1,8 +1,8 @@
 Cognitive Fabric 1Xq Verification Manifest
 ==========================================
 
-Release date: 2026-07-23
-Architecture model: CF-1XQ-1.0
+Release date: 2026-07-28
+Architecture model: CF-1XQ-1.1
 Publication model: CF-PUB-1.0
 Reference implementation: cognitive_fabric_reference.py
 Original prototype: preserved separately and not overwritten
@@ -13,15 +13,16 @@ Verification record
 Python: 3.12.13
 Compilation: PASS
 Demonstration: PASS
-Conformance suite: PASS (26 tests)
+Conformance suite: PASS (31 tests)
 
 SANY2 Version 2.2:
   Parse, semantic processing, and lint: PASS
 
 TLAPS rolling 1.6.0-pre, build 3ab43c7:
-  Strict clean run: PASS
+  Recorded strict clean run (2026-07-23): PASS
   Proof obligations: PASS (747 of 747)
   Isabelle reconstruction: PASS (no errors)
+  CF-PUB-1.0 specification and proof: unchanged in revision 1.1
 
 TLA Tools 2026.03.02.213938, revision 54e73ad:
   TLC configuration: Resolvers={r1,r2}, QueueCapacity=2, MaxOutcomeId=4
@@ -35,18 +36,20 @@ TLA Tools 2026.03.02.213938, revision 54e73ad:
   reachable PublishCommit)
 
 PDF build: PASS (two stable pdflatex passes)
-PDF visual inspection: PASS (21 rendered pages)
+PDF visual inspection: PASS (22 rendered pages)
 LaTeX diagnostic scan: PASS (no warnings, overfull boxes, underfull boxes,
 undefined references, or multiply defined labels)
 
 The test suite covers transform contracts and round trips, certified precision
-bounds, monotone broadening, closed-domain B-spline partition of unity,
+bounds, extreme-factor overflow safety, monotone broadening, precisely scoped
+closed-domain B-spline partition of unity, degenerate-domain rejection,
 canonical snapshot identity and referential integrity, deterministic replay,
 vote-mass and simplex invariants, exact bounded coalition optimization,
-prior-neutral pooling, proposal non-interference, cumulative learning,
-precision adaptation, lifecycle transitions, immutable generations,
-snapshot capture, concurrent publication, synchronous exception rollback,
-stale/foreign outcome accounting, and bounded-queue drops.
+interior and probability-floor pooling neutrality, Boolean outcome typing,
+proposal non-interference, cumulative learning, precision adaptation, lifecycle
+transitions, immutable generations, snapshot capture, concurrent publication,
+synchronous exception rollback, stale/foreign outcome accounting, and
+bounded-queue drops.
 
 The TLAPS module proves the abstract publication invariant: typing, queue and
 batch bounds, queue occurrence uniqueness, disjoint and exhaustive disposition
@@ -57,20 +60,24 @@ foreign-application exclusion.
 SHA-256
 -------
 
-aaa9229388d362732977485c641140849680ef3c30524cab9c75d87f9b9aea82  cognitive_fabric_reference.py
-f7da297c3b46e13fec435a119a364feaf1526565bcc3f7be2f13c670d373f2e5  test_cognitive_fabric_reference.py
-a06d2a43bf243d705cf75da0579cd9784051a12bce75cc760c50858c749ab3bf  Cognitive_Fabric_1Xq.tex
-66571af50e29def3e88a8960004280ae6ce64cbbb278933eab32ad28e629dd59  output/pdf/Cognitive_Fabric_1Xq.pdf
-69a589d48d64681dc28f3761f504abc84546ede208c1e1fc8825954a60e2666c  README.md
+7af89a1f85a8c1c444915a757fe34e6012922da1522e94402ba2a28efb3344b5  cognitive_fabric_reference.py
+2d1fa10ad5f8a82fa3dae6da27eff44af13cfc57db01be166e793a2f45333d09  test_cognitive_fabric_reference.py
+28cb73503b9f275f3dbf9991a74209aabe4efe0c6e447e9e755e2ae000fec0e8  Cognitive_Fabric_1Xq.tex
+f58cc58e25e1f165dea0c6649bea2da82e446a99f9db7c4ef29e2ddf3a2b8c7f  output/pdf/Cognitive_Fabric_1Xq.pdf
+4bd51e265eb87c2559837f1f6aff54b631730528b2dfb793a06616760c0339bc  README.md
 177bd47653f4efe0a43ed72bebd3edcebee64a424cb503a21b5ddd0abb89e06c  formal/CognitiveFabricPublication.tla
 4d656f7fcae777a5b22894ae44ca85fbb399d590d3ea9d950fc5257b17c041d8  formal/CognitiveFabricPublicationProof.tla
 7f6eaff276230e80117f85c58e370a8de62e8ea3aedb199f02472e5c14eac38c  formal/CognitiveFabricPublication.cfg
-79ebe67dea37b97b893d556c442b3e4541da849b20fe09a17df3d90969b467ce  formal/VERIFICATION_RESULTS.txt
+4b7c6619a3c292700e514bed34164c11e079fd716b6b175f7ea35f59967d35cf  formal/VERIFICATION_RESULTS.txt
 
 Claim boundary
 --------------
 
-The manuscript's algebraic proofs are over exact real arithmetic. TLAPS proves
+The manuscript's algebraic proofs are over exact real arithmetic. The
+finite-precision pool is neutral to the normalized stabilized prior and is
+exactly neutral to the original prior when no probability component is floored.
+Coalition optimality is combinatorially exact over realized scores; IEEE-754
+ordering is not claimed to reproduce every exact-real near-tie. TLAPS proves
 the abstract publication safety theorem only. TLC is a finite-instance
 cross-check; its liveness result is not a symbolic liveness proof. The Python
 code is a finite-precision implementation with explicit tolerances and

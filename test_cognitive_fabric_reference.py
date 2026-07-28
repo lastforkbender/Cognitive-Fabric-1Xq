@@ -159,6 +159,16 @@ class PrecisionContractTests(TestCase):
             -1e-10,
         )
 
+    def test_extreme_finite_factor_is_capped_without_overflow(self) -> None:
+        precision = cf.PrecisionModel(
+            ((1e308,),),
+            min_eigenvalue=1e-4,
+            max_eigenvalue=1e3,
+            max_condition=1e6,
+        )
+        matrix = precision.matrix()
+        self.assertTrue(isclose(matrix[0][0], 1e3, rel_tol=1e-12))
+
 
 class SplineContractTests(TestCase):
     def test_partition_of_unity_on_closed_domain(self) -> None:
@@ -170,6 +180,17 @@ class SplineContractTests(TestCase):
             self.assertTrue(all(component >= -1e-12 for component in basis))
             self.assertTrue(isclose(sum(basis), 1.0, abs_tol=1e-10))
         self.assertEqual(axis.evaluate(3.0), (0.0,) * 6 + (1.0,))
+
+    def test_partition_domain_is_derived_from_degree_and_basis_count(self) -> None:
+        axis = cf.SplineAxis(knots=(0.0, 1.0, 2.0, 3.0), degree=1)
+        self.assertEqual((axis.domain_min, axis.domain_max), (1.0, 2.0))
+        for value in (1.0, 1.25, 1.5, 1.75, 2.0):
+            self.assertTrue(isclose(sum(axis.evaluate(value)), 1.0, abs_tol=1e-12))
+        self.assertTrue(isclose(sum(axis.evaluate(0.5)), 0.5, abs_tol=1e-12))
+
+    def test_degenerate_active_domain_is_rejected(self) -> None:
+        with self.assertRaises(ValueError):
+            cf.SplineAxis(knots=(0.0, 0.0, 0.0), degree=1)
 
 
 class SnapshotContractTests(TestCase):
@@ -341,6 +362,48 @@ class EvaluationContractTests(TestCase):
         self.assertTrue(isclose(posterior["a"], 0.2, abs_tol=1e-12))
         self.assertTrue(isclose(posterior["b"], 0.8, abs_tol=1e-12))
 
+    def test_pool_is_neutral_to_stabilized_prior_at_probability_floor(self) -> None:
+        snapshot = minimal_snapshot(priors=(("a", 0.5), ("b", 2.5e-13)))
+        decision = cf.evaluate_snapshot(
+            snapshot,
+            (0.0,),
+            exploration_seed=0,
+            evaluation_ns=EVALUATION_NS,
+        )
+        prior_total = sum(candidate.prior for candidate in snapshot.candidates)
+        raw_prior = {
+            candidate.candidate_id: candidate.prior / prior_total
+            for candidate in snapshot.candidates
+        }
+        votes = tuple(
+            replace(
+                vote,
+                candidate_scores=tuple(
+                    replace(
+                        score,
+                        local_posterior=raw_prior[score.candidate_id],
+                    )
+                    for score in vote.candidate_scores
+                ),
+            )
+            for vote in decision.selector_votes
+        )
+        pooled = cf.aggregate_coalition(
+            decision.coalition,
+            votes,
+            snapshot.candidate_map(),
+        )
+        expected = cf.stabilize_distribution(raw_prior)
+        for item in pooled:
+            self.assertTrue(
+                isclose(
+                    item.posterior,
+                    expected[item.candidate_id],
+                    rel_tol=1e-12,
+                    abs_tol=1e-15,
+                )
+            )
+
     def test_structural_proposals_are_advisory_and_noninterfering(self) -> None:
         before = cf.snapshot_fingerprint(self.snapshot)
         decision = self.resolve((100.0, 100.0, 100.0))
@@ -353,6 +416,21 @@ class EvaluationContractTests(TestCase):
 
 
 class LearningContractTests(TestCase):
+    def test_non_boolean_success_is_rejected_before_queueing(self) -> None:
+        fabric = cf.build_example_fabric()
+        decision = fabric.resolve(
+            (0.0, 0.0, 0.0),
+            exploration_seed=0,
+            evaluation_ns=EVALUATION_NS,
+        )
+        with self.assertRaises(TypeError):
+            fabric.observe(
+                decision,
+                reward=1.0,
+                succeeded=1,  # type: ignore[arg-type]
+                latency_ns=10,
+            )
+
     def test_two_outcomes_accumulate_two_spline_updates(self) -> None:
         fabric = cf.build_example_fabric()
         before = fabric.snapshot

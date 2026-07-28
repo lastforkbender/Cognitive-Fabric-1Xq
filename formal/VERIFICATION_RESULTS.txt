@@ -1,7 +1,8 @@
 Cognitive Fabric CF-PUB-1.0 Verification Results
 ================================================
 
-Verification date: 2026-07-23
+Formal verification date: 2026-07-23
+Release conformance date: 2026-07-28
 
 Specification
 -------------
@@ -77,7 +78,11 @@ Command:
   python3 -m unittest -v test_cognitive_fabric_reference.py
 
 Result:
-  PASS (26 tests).
+  PASS (31 tests).
+
+The CF-PUB-1.0 specification and proof module are byte-for-byte unchanged from
+the recorded clean TLAPS/TLC run. Revision CF-1XQ-1.1 changes the algebraic
+manuscript, Python realization, and conformance suite only.
 
 Scope
 -----
